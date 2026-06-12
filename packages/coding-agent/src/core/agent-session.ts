@@ -512,6 +512,7 @@ export class AgentSession {
 					event.message.content,
 					event.message.display,
 					event.message.details,
+					event.message.excludeFromContext,
 				);
 			} else if (
 				event.message.role === "user" ||
@@ -1112,6 +1113,7 @@ export class AgentSession {
 						content: msg.content,
 						display: msg.display,
 						details: msg.details,
+						excludeFromContext: msg.excludeFromContext,
 						timestamp: Date.now(),
 					});
 				}
@@ -1289,7 +1291,8 @@ export class AgentSession {
 	/**
 	 * Send a custom message to the session. Creates a CustomMessageEntry.
 	 *
-	 * Handles three cases:
+	 * Handles four cases:
+	 * - Excluded from context: appends to state/session, no turn
 	 * - Streaming: queues message, processed when loop pulls from queue
 	 * - Not streaming + triggerTurn: appends to state/session, starts new turn
 	 * - Not streaming + no trigger: appends to state/session, no turn
@@ -1299,7 +1302,7 @@ export class AgentSession {
 	 * @param options.deliverAs Delivery mode: "steer", "followUp", or "nextTurn"
 	 */
 	async sendCustomMessage<T = unknown>(
-		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "excludeFromContext">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 	): Promise<void> {
 		const appMessage = {
@@ -1308,9 +1311,12 @@ export class AgentSession {
 			content: message.content,
 			display: message.display,
 			details: message.details,
+			excludeFromContext: message.excludeFromContext,
 			timestamp: Date.now(),
 		} satisfies CustomMessage<T>;
-		if (options?.deliverAs === "nextTurn") {
+		if (appMessage.excludeFromContext) {
+			this._recordCustomMessage(appMessage);
+		} else if (options?.deliverAs === "nextTurn") {
 			this._pendingNextTurnMessages.push(appMessage);
 		} else if (this.isStreaming) {
 			if (options?.deliverAs === "followUp") {
@@ -1321,16 +1327,21 @@ export class AgentSession {
 		} else if (options?.triggerTurn) {
 			await this._runAgentPrompt(appMessage);
 		} else {
-			this.agent.state.messages.push(appMessage);
-			this.sessionManager.appendCustomMessageEntry(
-				message.customType,
-				message.content,
-				message.display,
-				message.details,
-			);
-			this._emit({ type: "message_start", message: appMessage });
-			this._emit({ type: "message_end", message: appMessage });
+			this._recordCustomMessage(appMessage);
 		}
+	}
+
+	private _recordCustomMessage(message: CustomMessage): void {
+		this.agent.state.messages.push(message);
+		this.sessionManager.appendCustomMessageEntry(
+			message.customType,
+			message.content,
+			message.display,
+			message.details,
+			message.excludeFromContext,
+		);
+		this._emit({ type: "message_start", message });
+		this._emit({ type: "message_end", message });
 	}
 
 	/**

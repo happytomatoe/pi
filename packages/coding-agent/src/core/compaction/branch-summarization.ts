@@ -153,7 +153,14 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 			return entry.message;
 
 		case "custom_message":
-			return createCustomMessage(entry.customType, entry.content, entry.display, entry.details, entry.timestamp);
+			return createCustomMessage(
+				entry.customType,
+				entry.content,
+				entry.display,
+				entry.details,
+				entry.timestamp,
+				entry.excludeFromContext,
+			);
 
 		case "branch_summary":
 			return createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp);
@@ -212,6 +219,7 @@ export function prepareBranchEntries(entries: SessionEntry[], tokenBudget: numbe
 		const entry = entries[i];
 		const message = getMessageFromEntry(entry);
 		if (!message) continue;
+		if (message.role === "custom" && message.excludeFromContext) continue;
 
 		// Extract file ops from assistant messages (tool calls)
 		extractFileOpsFromMessage(message, fileOps);

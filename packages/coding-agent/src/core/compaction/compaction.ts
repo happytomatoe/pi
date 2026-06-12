@@ -81,7 +81,14 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 		return entry.message;
 	}
 	if (entry.type === "custom_message") {
-		return createCustomMessage(entry.customType, entry.content, entry.display, entry.details, entry.timestamp);
+		return createCustomMessage(
+			entry.customType,
+			entry.content,
+			entry.display,
+			entry.details,
+			entry.timestamp,
+			entry.excludeFromContext,
+		);
 	}
 	if (entry.type === "branch_summary") {
 		return createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp);
@@ -96,7 +103,11 @@ function getMessageFromEntryForCompaction(entry: SessionEntry): AgentMessage | u
 	if (entry.type === "compaction") {
 		return undefined;
 	}
-	return getMessageFromEntry(entry);
+	const message = getMessageFromEntry(entry);
+	if (message?.role === "custom" && message.excludeFromContext) {
+		return undefined;
+	}
+	return message;
 }
 
 /** Result from compact() - SessionManager adds uuid/parentUuid when saving */
@@ -270,7 +281,13 @@ export function estimateTokens(message: AgentMessage): number {
 			}
 			return Math.ceil(chars / 4);
 		}
-		case "custom":
+		case "custom": {
+			if (message.excludeFromContext) {
+				return 0;
+			}
+			chars = estimateTextAndImageContentChars(message.content);
+			return Math.ceil(chars / 4);
+		}
 		case "toolResult": {
 			chars = estimateTextAndImageContentChars(message.content);
 			return Math.ceil(chars / 4);

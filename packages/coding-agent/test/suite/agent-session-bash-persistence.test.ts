@@ -4,7 +4,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BashOperations } from "../../src/core/tools/bash.ts";
-import { createHarness, type Harness } from "./harness.ts";
+import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 function getEntryTypes(harness: Harness): string[] {
 	return harness.sessionManager.getEntries().map((entry) => entry.type);
@@ -173,6 +173,40 @@ describe("AgentSession bash and persistence characterization", () => {
 			"toolResult",
 			"assistant",
 		]);
+	});
+
+	it("excludes flagged custom messages from LLM context while preserving them", async () => {
+		const harness = await createHarness();
+		harnesses.push(harness);
+		let userTexts: string[] = [];
+
+		await harness.session.sendCustomMessage({
+			customType: "status",
+			content: "status panel",
+			display: true,
+			details: { a: 1 },
+			excludeFromContext: true,
+		});
+		harness.setResponses([
+			(context) => {
+				userTexts = context.messages
+					.filter((message) => message.role === "user")
+					.map((message) => getMessageText(message));
+				return fauxAssistantMessage("done");
+			},
+		]);
+
+		await harness.session.prompt("next prompt");
+
+		expect(userTexts).toEqual(["next prompt"]);
+		const entries = harness.sessionManager.getEntries();
+		expect(entries[0]?.type).toBe("custom_message");
+		if (entries[0]?.type !== "custom_message") return;
+		expect(entries[0].excludeFromContext).toBe(true);
+		expect(harness.sessionManager.buildSessionContext().messages[0]).toMatchObject({
+			role: "custom",
+			excludeFromContext: true,
+		});
 	});
 
 	it("does not emit message_end for bash execution messages", async () => {

@@ -15,9 +15,11 @@ import {
 	prepareCompaction,
 	shouldCompact,
 } from "../src/core/compaction/index.ts";
+import type { CustomMessage } from "../src/core/messages.ts";
 import {
 	buildSessionContext,
 	type CompactionEntry,
+	type CustomMessageEntry,
 	type ModelChangeEntry,
 	migrateSessionEntries,
 	parseSessionEntries,
@@ -87,6 +89,22 @@ function createMessageEntry(message: AgentMessage): SessionMessageEntry {
 		parentId: lastId,
 		timestamp: new Date().toISOString(),
 		message,
+	};
+	lastId = id;
+	return entry;
+}
+
+function createCustomMessageEntry(content: string, excludeFromContext?: boolean): CustomMessageEntry {
+	const id = `test-id-${entryCounter++}`;
+	const entry: CustomMessageEntry = {
+		type: "custom_message",
+		id,
+		parentId: lastId,
+		timestamp: new Date().toISOString(),
+		customType: "status",
+		content,
+		display: true,
+		excludeFromContext,
 	};
 	lastId = id;
 	return entry;
@@ -183,6 +201,27 @@ describe("Token calculation", () => {
 	it("should handle zero values", () => {
 		const usage = createMockUsage(0, 0, 0, 0);
 		expect(calculateContextTokens(usage)).toBe(0);
+	});
+
+	it("should ignore excluded custom messages in context token estimates", () => {
+		const excludedCustom: CustomMessage = {
+			role: "custom",
+			customType: "status",
+			content: "x".repeat(1000),
+			display: true,
+			excludeFromContext: true,
+			timestamp: Date.now(),
+		};
+		const visibleCustom: CustomMessage = { ...excludedCustom, excludeFromContext: false };
+		const assistant = createAssistantMessage("assistant", createMockUsage(10, 5));
+
+		expect(estimateContextTokens([excludedCustom])).toMatchObject({ tokens: 0, trailingTokens: 0 });
+		expect(estimateContextTokens([visibleCustom]).tokens).toBeGreaterThan(0);
+		expect(estimateContextTokens([assistant, excludedCustom])).toMatchObject({
+			tokens: 15,
+			usageTokens: 15,
+			trailingTokens: 0,
+		});
 	});
 });
 
@@ -392,6 +431,22 @@ describe("buildSessionContext", () => {
 		// model_change is later overwritten by assistant message's model info
 		expect(loaded.model).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
 		expect(loaded.thinkingLevel).toBe("high");
+	});
+});
+
+describe("prepareCompaction with custom messages", () => {
+	it("should ignore excluded custom messages in token estimates and summarized messages", () => {
+		const excludedCustom = createCustomMessageEntry("x".repeat(1000), true);
+		const user = createMessageEntry(createUserMessage("keep"));
+		const preparation = prepareCompaction([excludedCustom, user], {
+			enabled: true,
+			reserveTokens: 0,
+			keepRecentTokens: 1,
+		});
+
+		expect(preparation).toBeDefined();
+		expect(preparation!.tokensBefore).toBe(1);
+		expect(preparation!.messagesToSummarize).toEqual([]);
 	});
 });
 

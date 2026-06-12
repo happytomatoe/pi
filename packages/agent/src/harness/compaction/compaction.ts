@@ -68,6 +68,7 @@ function getMessageFromEntry(entry: SessionTreeEntry): AgentMessage | undefined 
 			entry.display,
 			entry.details,
 			entry.timestamp,
+			entry.excludeFromContext,
 		);
 	}
 	if (entry.type === "branch_summary") {
@@ -83,7 +84,11 @@ function getMessageFromEntryForCompaction(entry: SessionTreeEntry): AgentMessage
 	if (entry.type === "compaction") {
 		return undefined;
 	}
-	return getMessageFromEntry(entry);
+	const message = getMessageFromEntry(entry);
+	if (message?.role === "custom" && message.excludeFromContext) {
+		return undefined;
+	}
+	return message;
 }
 
 /** Generated compaction data ready to be persisted as a compaction entry. */
@@ -240,7 +245,13 @@ export function estimateTokens(message: AgentMessage): number {
 			}
 			return Math.ceil(chars / 4);
 		}
-		case "custom":
+		case "custom": {
+			if (message.excludeFromContext) {
+				return 0;
+			}
+			chars = estimateTextAndImageContentChars(message.content);
+			return Math.ceil(chars / 4);
+		}
 		case "toolResult": {
 			chars = estimateTextAndImageContentChars(message.content);
 			return Math.ceil(chars / 4);

@@ -51,6 +51,7 @@ export function buildSessionContext(pathEntries: SessionTreeEntry[]): SessionCon
 					entry.display,
 					entry.details,
 					entry.timestamp,
+					entry.excludeFromContext,
 				),
 			);
 		} else if (entry.type === "branch_summary" && entry.summary) {
@@ -206,6 +207,7 @@ export class Session<TMetadata extends SessionMetadata = SessionMetadata> {
 		content: string | (TextContent | ImageContent)[],
 		display: boolean,
 		details?: T,
+		excludeFromContext?: boolean,
 	): Promise<string> {
 		return this.appendTypedEntry({
 			type: "custom_message",
@@ -216,6 +218,7 @@ export class Session<TMetadata extends SessionMetadata = SessionMetadata> {
 			content,
 			display,
 			details,
+			excludeFromContext,
 		} satisfies CustomMessageEntry<T>);
 	}
 

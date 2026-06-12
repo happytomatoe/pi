@@ -8,6 +8,7 @@ import {
 	type Usage,
 } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { prepareBranchEntries } from "../../src/harness/compaction/branch-summarization.ts";
 import {
 	type CompactionPreparation,
 	calculateContextTokens,
@@ -289,9 +290,12 @@ describe("harness compaction", () => {
 			timestamp: Date.now(),
 		};
 
+		const excludedCustom: AgentMessage = { ...customString, content: "x".repeat(1000), excludeFromContext: true };
+
 		expect(estimateTokens({ role: "user", content: "plain user", timestamp: Date.now() })).toBeGreaterThan(0);
 		expect(estimateTokens(assistantWithThinkingAndTool)).toBeGreaterThan(0);
 		expect(estimateTokens(customString)).toBeGreaterThan(0);
+		expect(estimateTokens(excludedCustom)).toBe(0);
 		expect(estimateTokens(toolResultWithImage)).toBeGreaterThan(1000);
 		expect(estimateTokens(bashExecution)).toBeGreaterThan(0);
 		expect(estimateTokens(branchSummaryMessage)).toBeGreaterThan(0);
@@ -310,6 +314,11 @@ describe("harness compaction", () => {
 		expect(estimateContextTokens([assistant, createUserMessage("tail")])).toMatchObject({
 			usageTokens: 20,
 			lastUsageIndex: 0,
+		});
+		expect(estimateContextTokens([assistant, excludedCustom])).toMatchObject({
+			tokens: 20,
+			usageTokens: 20,
+			trailingTokens: 0,
 		});
 	});
 
@@ -378,6 +387,46 @@ describe("harness compaction", () => {
 		expect([...preparation!.fileOps.read]).toContain("old-read.ts");
 		expect([...preparation!.fileOps.edited]).toContain("old-edit.ts");
 		expect([...preparation!.fileOps.written]).toContain("written.ts");
+	});
+
+	it("skips excluded custom messages during compaction token estimates", () => {
+		const customMessage: CustomMessageEntry = {
+			type: "custom_message",
+			id: createId(),
+			parentId: null,
+			timestamp: new Date().toISOString(),
+			customType: "status",
+			content: "x".repeat(1000),
+			display: true,
+			excludeFromContext: true,
+		};
+		const user = createMessageEntry(createUserMessage("keep"), customMessage.id);
+
+		const preparation = getOrThrow(
+			prepareCompaction([customMessage, user], { enabled: true, reserveTokens: 0, keepRecentTokens: 1 }),
+		);
+
+		expect(preparation?.tokensBefore).toBe(1);
+		expect(preparation?.messagesToSummarize).toEqual([]);
+	});
+
+	it("skips excluded custom messages before branch summary token budgeting", () => {
+		const user = createMessageEntry(createUserMessage("keep"));
+		const customMessage: CustomMessageEntry = {
+			type: "custom_message",
+			id: createId(),
+			parentId: user.id,
+			timestamp: new Date().toISOString(),
+			customType: "status",
+			content: "x".repeat(1000),
+			display: true,
+			excludeFromContext: true,
+		};
+
+		const preparation = prepareBranchEntries([user, customMessage], 10);
+
+		expect(preparation.messages.map((message) => message.role)).toEqual(["user"]);
+		expect(preparation.totalTokens).toBe(1);
 	});
 
 	it("prepares custom and branch summary entries for summarization", () => {

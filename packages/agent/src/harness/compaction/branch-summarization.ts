@@ -103,7 +103,14 @@ function getMessageFromEntry(entry: SessionTreeEntry): AgentMessage | undefined 
 			return entry.message;
 
 		case "custom_message":
-			return createCustomMessage(entry.customType, entry.content, entry.display, entry.details, entry.timestamp);
+			return createCustomMessage(
+				entry.customType,
+				entry.content,
+				entry.display,
+				entry.details,
+				entry.timestamp,
+				entry.excludeFromContext,
+			);
 
 		case "branch_summary":
 			return createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp);
@@ -143,6 +150,7 @@ export function prepareBranchEntries(entries: SessionTreeEntry[], tokenBudget: n
 		const entry = entries[i];
 		const message = getMessageFromEntry(entry);
 		if (!message) continue;
+		if (message.role === "custom" && message.excludeFromContext) continue;
 		extractFileOpsFromMessage(message, fileOps);
 
 		const tokens = estimateTokens(message);

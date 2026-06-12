@@ -388,6 +388,7 @@ export interface CustomMessageEntry<T = unknown> extends SessionTreeEntryBase {
 	content: string | (TextContent | ImageContent)[];
 	details?: T;
 	display: boolean;
+	excludeFromContext?: boolean;
 }
 
 export interface LabelEntry extends SessionTreeEntryBase {

@@ -258,6 +258,98 @@ describe("AgentSession queue characterization", () => {
 		expect(getAssistantTexts(harness)).toEqual(["", "original turn complete", "batched follow-up response"]);
 	});
 
+	it("records excluded custom messages with triggerTurn without starting a provider turn", async () => {
+		const harness = await createHarness();
+		harnesses.push(harness);
+		let providerCalled = false;
+		harness.setResponses([
+			() => {
+				providerCalled = true;
+				return fauxAssistantMessage("unexpected");
+			},
+		]);
+
+		await harness.session.sendCustomMessage(
+			{ customType: "status", content: "display only", display: true, details: {}, excludeFromContext: true },
+			{ triggerTurn: true },
+		);
+
+		expect(providerCalled).toBe(false);
+		expect(harness.session.messages).toHaveLength(1);
+		expect(harness.session.messages[0]).toMatchObject({
+			role: "custom",
+			customType: "status",
+			excludeFromContext: true,
+		});
+		expect(harness.getPendingResponseCount()).toBe(1);
+	});
+
+	it("records excluded custom messages with deliverAs steer while streaming", async () => {
+		const waiting = await createWaitingHarness();
+		const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
+		harnesses.push(harness);
+		let recordedBeforeRelease = false;
+
+		harness.setResponses([
+			fauxAssistantMessage(fauxToolCall("wait", {}), { stopReason: "toolUse" }),
+			fauxAssistantMessage("done"),
+		]);
+
+		await waitForToolStart;
+		await harness.session.sendCustomMessage(
+			{ customType: "status", content: "steer display only", display: true, details: {}, excludeFromContext: true },
+			{ deliverAs: "steer" },
+		);
+		recordedBeforeRelease = harness.session.messages.some(
+			(message) => message.role === "custom" && message.customType === "status",
+		);
+		releaseToolExecution();
+		await promptPromise;
+
+		expect(recordedBeforeRelease).toBe(true);
+		expect(
+			harness.session.messages.filter((message) => message.role === "custom" && message.customType === "status"),
+		).toHaveLength(1);
+	});
+
+	it("records excluded custom messages with deliverAs followUp while streaming without starting another turn", async () => {
+		const waiting = await createWaitingHarness();
+		const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
+		harnesses.push(harness);
+		let providerCalledForFollowUp = false;
+		let recordedBeforeRelease = false;
+
+		harness.setResponses([
+			fauxAssistantMessage(fauxToolCall("wait", {}), { stopReason: "toolUse" }),
+			fauxAssistantMessage("done"),
+			() => {
+				providerCalledForFollowUp = true;
+				return fauxAssistantMessage("unexpected follow-up");
+			},
+		]);
+
+		await waitForToolStart;
+		await harness.session.sendCustomMessage(
+			{
+				customType: "status",
+				content: "follow-up display only",
+				display: true,
+				details: {},
+				excludeFromContext: true,
+			},
+			{ deliverAs: "followUp" },
+		);
+		recordedBeforeRelease = harness.session.messages.some(
+			(message) => message.role === "custom" && message.customType === "status",
+		);
+		releaseToolExecution();
+		await promptPromise;
+
+		expect(recordedBeforeRelease).toBe(true);
+		expect(providerCalledForFollowUp).toBe(false);
+		expect(harness.getPendingResponseCount()).toBe(1);
+	});
+
 	it("queues custom messages with deliverAs steer while streaming", async () => {
 		const waiting = await createWaitingHarness();
 		const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;

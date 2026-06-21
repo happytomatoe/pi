@@ -313,6 +313,10 @@ async function createSessionManager(
 			const selectedPath = await selectSession(
 				(onProgress) => SessionManager.list(cwd, sessionDir, onProgress),
 				(onProgress) => SessionManager.listAll(sessionDir, onProgress),
+				{
+					showHardwareCursor: settingsManager.getShowHardwareCursor(),
+					clearOnShrink: settingsManager.getClearOnShrink(),
+				},
 			);
 			if (!selectedPath) {
 				console.log(chalk.dim("No session selected"));

@@ -4,6 +4,7 @@ import {
 	type Component,
 	Container,
 	getCapabilities,
+	type HardwareCursorSetting,
 	type SelectItem,
 	SelectList,
 	type SelectListLayoutOptions,
@@ -69,7 +70,7 @@ export interface SettingsConfig {
 	enableInstallTelemetry: boolean;
 	doubleEscapeAction: "fork" | "tree" | "none";
 	treeFilterMode: "default" | "no-tools" | "user-only" | "labeled-only" | "all";
-	showHardwareCursor: boolean;
+	showHardwareCursor: HardwareCursorSetting;
 	editorPaddingX: number;
 	autocompleteMaxVisible: number;
 	quietStartup: boolean;
@@ -98,7 +99,7 @@ export interface SettingsCallbacks {
 	onEnableInstallTelemetryChange: (enabled: boolean) => void;
 	onDoubleEscapeActionChange: (action: "fork" | "tree" | "none") => void;
 	onTreeFilterModeChange: (mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all") => void;
-	onShowHardwareCursorChange: (enabled: boolean) => void;
+	onShowHardwareCursorChange: (setting: HardwareCursorSetting) => void;
 	onEditorPaddingXChange: (padding: number) => void;
 	onAutocompleteMaxVisibleChange: (maxVisible: number) => void;
 	onQuietStartupChange: (enabled: boolean) => void;
@@ -656,14 +657,14 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Hardware cursor toggle (insert after skill-commands)
+		// Hardware cursor mode (insert after skill-commands)
 		const skillCommandsIndex = items.findIndex((item) => item.id === "skill-commands");
 		items.splice(skillCommandsIndex + 1, 0, {
 			id: "show-hardware-cursor",
-			label: "Show hardware cursor",
-			description: "Show the terminal cursor while still positioning it for IME support",
-			currentValue: config.showHardwareCursor ? "true" : "false",
-			values: ["true", "false"],
+			label: "Cursor mode",
+			description: "false: software cursor only; true: show hardware cursor too; native: hardware cursor only",
+			currentValue: String(config.showHardwareCursor),
+			values: ["false", "true", "native"],
 		});
 
 		// Editor padding toggle (insert after show-hardware-cursor)
@@ -777,7 +778,7 @@ export class SettingsSelectorComponent extends Container {
 						);
 						break;
 					case "show-hardware-cursor":
-						callbacks.onShowHardwareCursorChange(newValue === "true");
+						callbacks.onShowHardwareCursorChange(newValue === "native" ? "native" : newValue === "true");
 						break;
 					case "editor-padding":
 						callbacks.onEditorPaddingXChange(parseInt(newValue, 10));

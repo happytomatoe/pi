@@ -50,9 +50,9 @@ When a `Focusable` component has focus, TUI:
 1. Sets `focused = true` on the component
 2. Scans rendered output for `CURSOR_MARKER` (a zero-width APC escape sequence)
 3. Positions the hardware terminal cursor at that location
-4. Shows the hardware cursor only when `showHardwareCursor` is enabled
+4. Shows the hardware cursor when `showHardwareCursor` is `true` or `"native"`
 
-The cursor remains hidden by default. This keeps the fake cursor rendering, while still positioning the hardware cursor for terminals that track IME candidate windows with hidden cursors. Some terminals require a visible hardware cursor for IME positioning; enable it with `showHardwareCursor`, `setShowHardwareCursor(true)`, or `PI_HARDWARE_CURSOR=1`. The `Editor` and `Input` built-in components already implement this interface.
+The cursor remains hidden by default. This keeps the fake cursor rendering, while still positioning the hardware cursor for terminals that track IME candidate windows with hidden cursors. Some terminals require a visible hardware cursor for IME positioning; enable it with `showHardwareCursor: true`, `setShowHardwareCursor(true)`, or `PI_HARDWARE_CURSOR=1`. To use the terminal cursor only, set `showHardwareCursor: "native"`, call `setShowHardwareCursor("native")`, or set `PI_HARDWARE_CURSOR=native`; in that mode TUI strips the marker-adjacent reverse-video software cursor. The `Editor` and `Input` built-in components already implement this interface.
 
 ### Container Components with Embedded Inputs
 

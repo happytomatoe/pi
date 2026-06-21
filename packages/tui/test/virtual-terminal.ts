@@ -1,6 +1,6 @@
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import xterm from "@xterm/headless";
-import type { Terminal } from "../src/terminal.ts";
+import type { HardwareCursorSetting, Terminal } from "../src/terminal.ts";
 
 // Extract Terminal class from the module
 const XtermTerminal = xterm.Terminal;
@@ -9,6 +9,8 @@ const XtermTerminal = xterm.Terminal;
  * Virtual terminal for testing using xterm.js for accurate terminal emulation
  */
 export class VirtualTerminal implements Terminal {
+	showHardwareCursor: HardwareCursorSetting = false;
+
 	private xterm: XtermTerminalType;
 	private inputHandler?: (data: string) => void;
 	private resizeHandler?: () => void;

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added native hardware cursor mode via `showHardwareCursor: "native"` or `PI_HARDWARE_CURSOR=native`, which shows the terminal cursor and strips pi's software cursor.
+
 ### Fixed
 
 - Fixed the plan-mode example to preserve active custom tools, skip the action prompt when no plan is found, and queue refinement/execution follow-ups correctly from `agent_end` ([#5940](https://github.com/earendil-works/pi/issues/5940)).

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added native hardware cursor mode via `PI_HARDWARE_CURSOR=native`, `new ProcessTerminal({ showHardwareCursor: "native" })`, `terminal.showHardwareCursor = "native"`, or `setShowHardwareCursor("native")`, which shows the terminal cursor and strips the marker-adjacent software cursor.
+
 ## [0.79.9] - 2026-06-20
 
 ### Fixed

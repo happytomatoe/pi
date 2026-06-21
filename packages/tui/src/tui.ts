@@ -7,7 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { performance } from "node:perf_hooks";
 import { isKeyRelease, matchesKey } from "./keys.ts";
-import type { Terminal } from "./terminal.ts";
+import type { HardwareCursorSetting, Terminal } from "./terminal.ts";
 import {
 	isOsc11BackgroundColorResponse,
 	parseOsc11BackgroundColor,
@@ -118,6 +118,33 @@ export function isFocusable(component: Component | null): component is Component
  * TUI finds and strips this marker, then positions the hardware cursor there.
  */
 export const CURSOR_MARKER = "\x1b_pi:c\x07";
+
+const REVERSE_VIDEO_ON = "\x1b[7m";
+const SGR_RESET = "\x1b[0m";
+const CURSOR_CELL_RESET = /\x1b\[(?:27|0)m/;
+
+export function stripCursorMarker(line: string, stripSoftwareCursor: boolean): string {
+	const markerIndex = line.indexOf(CURSOR_MARKER);
+	if (markerIndex === -1) return line;
+
+	const beforeMarker = line.slice(0, markerIndex);
+	let afterMarker = line.slice(markerIndex + CURSOR_MARKER.length);
+
+	if (stripSoftwareCursor && afterMarker.startsWith(REVERSE_VIDEO_ON)) {
+		const afterReverseOn = afterMarker.slice(REVERSE_VIDEO_ON.length);
+		const reset = CURSOR_CELL_RESET.exec(afterReverseOn);
+		if (reset) {
+			const cursorCell = afterReverseOn.slice(0, reset.index);
+			const afterReset = afterReverseOn.slice(reset.index + reset[0].length);
+			const preservedReset = reset[0] === SGR_RESET ? SGR_RESET : "";
+			afterMarker = cursorCell + preservedReset + afterReset;
+		} else {
+			afterMarker = afterReverseOn;
+		}
+	}
+
+	return beforeMarker + afterMarker;
+}
 
 export { visibleWidth };
 
@@ -309,7 +336,6 @@ export class TUI extends Container {
 	private static readonly MIN_RENDER_INTERVAL_MS = 16;
 	private cursorRow = 0; // Logical cursor row (end of rendered content)
 	private hardwareCursorRow = 0; // Actual terminal cursor row (may differ due to IME positioning)
-	private showHardwareCursor = process.env.PI_HARDWARE_CURSOR === "1";
 	private clearOnShrink = process.env.PI_CLEAR_ON_SHRINK === "1"; // Clear empty rows when content shrinks (default: off)
 	private maxLinesRendered = 0; // Track terminal's working area (max lines ever rendered)
 	private previousViewportTop = 0; // Track previous viewport top for resize-aware cursor moves
@@ -325,26 +351,23 @@ export class TUI extends Container {
 	private overlayStack: OverlayStackEntry[] = [];
 	private overlayFocusRestore: OverlayFocusRestoreState = { status: "inactive" };
 
-	constructor(terminal: Terminal, showHardwareCursor?: boolean) {
+	constructor(terminal: Terminal) {
 		super();
 		this.terminal = terminal;
-		if (showHardwareCursor !== undefined) {
-			this.showHardwareCursor = showHardwareCursor;
-		}
 	}
 
 	get fullRedraws(): number {
 		return this.fullRedrawCount;
 	}
 
-	getShowHardwareCursor(): boolean {
-		return this.showHardwareCursor;
+	getShowHardwareCursor(): HardwareCursorSetting {
+		return this.terminal.showHardwareCursor ?? false;
 	}
 
-	setShowHardwareCursor(enabled: boolean): void {
-		if (this.showHardwareCursor === enabled) return;
-		this.showHardwareCursor = enabled;
-		if (!enabled) {
+	setShowHardwareCursor(setting: HardwareCursorSetting): void {
+		if (this.getShowHardwareCursor() === setting) return;
+		this.terminal.showHardwareCursor = setting;
+		if (setting === false) {
 			this.terminal.hideCursor();
 		}
 		this.requestRender();
@@ -1242,8 +1265,10 @@ export class TUI extends Container {
 				const beforeMarker = line.slice(0, markerIndex);
 				const col = visibleWidth(beforeMarker);
 
-				// Strip marker from the line
-				lines[row] = line.slice(0, markerIndex) + line.slice(markerIndex + CURSOR_MARKER.length);
+				// Strip marker from the line. In native cursor mode, also strip the
+				// marker-adjacent reverse-video software cursor so only the terminal
+				// cursor remains visible.
+				lines[row] = stripCursorMarker(line, this.getShowHardwareCursor() === "native");
 
 				return { row, col };
 			}
@@ -1650,7 +1675,7 @@ export class TUI extends Container {
 		}
 
 		this.hardwareCursorRow = targetRow;
-		if (this.showHardwareCursor) {
+		if (this.getShowHardwareCursor() !== false) {
 			this.terminal.showCursor();
 		} else {
 			this.terminal.hideCursor();

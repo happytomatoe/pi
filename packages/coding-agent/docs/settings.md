@@ -61,7 +61,7 @@ Use `/trust` in interactive mode to save a project trust decision for future ses
 | `treeFilterMode` | string | `"default"` | Default filter for `/tree`: `"default"`, `"no-tools"`, `"user-only"`, `"labeled-only"`, `"all"` |
 | `editorPaddingX` | number | `0` | Horizontal padding for input editor (0-3) |
 | `autocompleteMaxVisible` | number | `5` | Max visible items in autocomplete dropdown (3-20) |
-| `showHardwareCursor` | boolean | `false` | Show the terminal cursor while TUI positions it for IME support |
+| `showHardwareCursor` | boolean or `"native"` | `false` | Cursor mode: `false` keeps the software cursor only, `true` also shows the terminal cursor, `"native"` strips the software cursor and uses only the terminal cursor |
 
 ### Telemetry and update checks
 

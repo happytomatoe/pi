@@ -33,7 +33,7 @@ function isOfficialDistribution({ packageName, appName, configDirName }: Distrib
 function createStartupTui(settingsManager: SettingsManager): TUI {
 	initTheme(settingsManager.getTheme());
 	setKeybindings(KeybindingsManager.create());
-	const ui = new TUI(new ProcessTerminal(), settingsManager.getShowHardwareCursor());
+	const ui = new TUI(new ProcessTerminal({ showHardwareCursor: settingsManager.getShowHardwareCursor() }));
 	ui.setClearOnShrink(settingsManager.getClearOnShrink());
 	return ui;
 }

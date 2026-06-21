@@ -398,7 +398,7 @@ export class InteractiveMode {
 			await this.rebindCurrentSession();
 		});
 		this.version = VERSION;
-		this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
+		this.ui = new TUI(new ProcessTerminal({ showHardwareCursor: this.settingsManager.getShowHardwareCursor() }));
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
 		this.headerContainer = new Container();
 		this.chatContainer = new Container();
@@ -4075,9 +4075,9 @@ export class InteractiveMode {
 					onTreeFilterModeChange: (mode) => {
 						this.settingsManager.setTreeFilterMode(mode);
 					},
-					onShowHardwareCursorChange: (enabled) => {
-						this.settingsManager.setShowHardwareCursor(enabled);
-						this.ui.setShowHardwareCursor(enabled);
+					onShowHardwareCursorChange: (setting) => {
+						this.settingsManager.setShowHardwareCursor(setting);
+						this.ui.setShowHardwareCursor(setting);
 					},
 					onEditorPaddingXChange: (padding) => {
 						this.settingsManager.setEditorPaddingX(padding);

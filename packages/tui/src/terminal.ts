@@ -16,6 +16,18 @@ const DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS = 7;
 const KEYBOARD_PROTOCOL_RESPONSE_FRAGMENT_TIMEOUT_MS = 150;
 const KITTY_KEYBOARD_PROTOCOL_QUERY = `\x1b[>${DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS}u\x1b[?u\x1b[c`;
 
+/** Controls hardware cursor visibility and software cursor rendering. */
+export type HardwareCursorSetting = boolean | "native";
+
+export interface ProcessTerminalOptions {
+	showHardwareCursor?: HardwareCursorSetting;
+}
+
+function parseHardwareCursorSetting(value: string | undefined): HardwareCursorSetting {
+	if (value === "native") return "native";
+	return value === "1" || value === "true";
+}
+
 export type KeyboardProtocolNegotiationSequence =
 	| { type: "kitty-flags"; flags: number }
 	| { type: "device-attributes" };
@@ -50,6 +62,9 @@ export function normalizeAppleTerminalInput(data: string, isAppleTerminal: boole
  * Minimal terminal interface for TUI
  */
 export interface Terminal {
+	/** Hardware cursor mode. `"native"` also strips pi's software cursor. */
+	showHardwareCursor?: HardwareCursorSetting;
+
 	// Start the terminal with input and resize handlers
 	start(onInput: (data: string) => void, onResize: () => void): void;
 
@@ -97,6 +112,8 @@ export interface Terminal {
  * Real terminal using process.stdin/stdout
  */
 export class ProcessTerminal implements Terminal {
+	showHardwareCursor: HardwareCursorSetting;
+
 	private wasRaw = false;
 	private inputHandler?: (data: string) => void;
 	private resizeHandler?: () => void;
@@ -122,6 +139,11 @@ export class ProcessTerminal implements Terminal {
 		}
 		return env;
 	})();
+
+	constructor(options: ProcessTerminalOptions = {}) {
+		this.showHardwareCursor =
+			options.showHardwareCursor ?? parseHardwareCursorSetting(process.env.PI_HARDWARE_CURSOR);
+	}
 
 	get kittyProtocolActive(): boolean {
 		return this._kittyProtocolActive;

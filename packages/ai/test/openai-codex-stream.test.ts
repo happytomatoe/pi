@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { zstdDecompressSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	getOpenAICodexWebSocketDebugStats,
@@ -1652,6 +1653,81 @@ describe("openai-codex streaming", () => {
 		const result = await resultPromise;
 		expect(result.content.find((content) => content.type === "text")?.text).toBe("Hello");
 		expect(codexRequests).toBe(2);
+	});
+
+	it("zstd-compresses large SSE request bodies and leaves small ones uncompressed", async () => {
+		const token = mockToken();
+		const encoder = new TextEncoder();
+		const sse = buildSSEPayload({ status: "completed" });
+
+		let capturedEncoding: string | null = null;
+		let capturedBody: Uint8Array | string | undefined;
+
+		const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url !== "https://chatgpt.com/backend-api/codex/responses") {
+				throw new Error(`Unexpected URL: ${url}`);
+			}
+			const headers = init?.headers instanceof Headers ? init.headers : undefined;
+			capturedEncoding = headers?.get("content-encoding") ?? null;
+			capturedBody = init?.body as Uint8Array | string | undefined;
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(encoder.encode(sse));
+						controller.close();
+					},
+				}),
+				{ status: 200, headers: { "content-type": "text/event-stream" } },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const model: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+
+		// Large body (>64KB) is zstd-compressed with the matching content-encoding header.
+		const largeText = "compress me ".repeat(8000);
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: "You are a helpful assistant.",
+				messages: [{ role: "user", content: largeText, timestamp: 1 }],
+			},
+			{ apiKey: token, transport: "sse" },
+		).result();
+
+		expect(capturedEncoding).toBe("zstd");
+		expect(capturedBody).toBeInstanceOf(Uint8Array);
+		const decoded = JSON.parse(Buffer.from(zstdDecompressSync(capturedBody as Uint8Array)).toString("utf8")) as {
+			input: Array<{ content: Array<{ text: string }> }>;
+		};
+		expect(decoded.input[0].content[0].text).toBe(largeText);
+
+		// Small body stays uncompressed as a plain JSON string.
+		capturedEncoding = null;
+		capturedBody = undefined;
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: "You are a helpful assistant.",
+				messages: [{ role: "user", content: "hi", timestamp: 1 }],
+			},
+			{ apiKey: token, transport: "sse" },
+		).result();
+
+		expect(capturedEncoding).toBeNull();
+		expect(typeof capturedBody).toBe("string");
 	});
 
 	it("uses exponential backoff across repeated SSE retries without retry headers", async () => {

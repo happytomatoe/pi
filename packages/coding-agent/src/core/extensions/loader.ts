@@ -371,6 +371,25 @@ function isCurrentCacheToken(cacheToken: ExtensionCacheToken | undefined): cache
 	);
 }
 
+/**
+ * Shared jiti instance with module caching enabled.
+ * All extensions share this single instance, so shared dependencies
+ * (e.g., @earendil-works/pi-agent-core) are compiled only once.
+ */
+let _sharedJiti: ReturnType<typeof createJiti> | null = null;
+
+function getSharedJiti(): ReturnType<typeof createJiti> {
+	if (_sharedJiti) return _sharedJiti;
+	_sharedJiti = createJiti(import.meta.url, {
+		moduleCache: true,
+		// In Bun binary: use virtualModules for bundled packages (no filesystem resolution)
+		// Also disable tryNative so jiti handles ALL imports (not just the entry point)
+		// In Node.js/dev: use aliases to resolve to node_modules paths
+		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
+	});
+	return _sharedJiti;
+}
+
 async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
 	if (isCurrentCacheToken(cacheToken)) {
 		const cachedFactory = extensionCache.get(extensionPath);
@@ -379,18 +398,12 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		}
 	}
 
-	const jiti = createJiti(import.meta.url, {
-		moduleCache: false,
-		// In Bun binary: use virtualModules for bundled packages (no filesystem resolution)
-		// Also disable tryNative so jiti handles ALL imports (not just the entry point)
-		// In Node.js/dev: use aliases to resolve to node_modules paths
-		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
-	});
+	const jiti = getSharedJiti();
 
 	const startTime = performance.now();
 	const module = await jiti.import(extensionPath, { default: true });
 	const endTime = performance.now();
-	console.log(`Extension ${extensionPath} loaded in ${endTime - startTime}ms`);
+	console.log(`[Singleton] ${extensionPath} loaded in ${endTime - startTime}ms`);
 	const factory = module as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;

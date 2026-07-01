@@ -15,6 +15,7 @@ import {
 	type SelfUpdatePackageTarget,
 	VERSION,
 } from "./config.ts";
+import { rebuildExtensions } from "./core/extensions/rebuild.ts";
 import type { ExtensionFactory } from "./core/extensions/types.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
@@ -28,7 +29,7 @@ import {
 	quarantineWindowsNativeDependencies,
 } from "./utils/windows-self-update.ts";
 
-export type PackageCommand = "install" | "remove" | "update" | "list";
+export type PackageCommand = "install" | "remove" | "update" | "list" | "rebuild";
 
 type UpdateTarget = { type: "all" } | { type: "self" } | { type: "extensions"; source?: string };
 
@@ -84,6 +85,8 @@ function getPackageCommandUsage(command: PackageCommand): string {
 			return `${APP_NAME} update [source|self|pi] [--self|--extensions|--all] [--extension <source>] [--approve|--no-approve] [--force]`;
 		case "list":
 			return `${APP_NAME} list [--approve|--no-approve]`;
+		case "rebuild":
+			return `${APP_NAME} rebuild`;
 	}
 }
 
@@ -162,6 +165,14 @@ Options:
   -na, --no-approve  Ignore project-local files for this command
 `);
 			return;
+
+		case "rebuild":
+			console.log(`${chalk.bold("Usage:")}
+  ${getPackageCommandUsage("rebuild")}
+
+Recompile all installed TypeScript extensions.
+`);
+			return;
 	}
 }
 
@@ -170,6 +181,8 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 	let command: PackageCommand | undefined;
 	if (rawCommand === "uninstall") {
 		command = "remove";
+	} else if (rawCommand === "rebuild") {
+		command = "rebuild";
 	} else if (rawCommand === "install" || rawCommand === "remove" || rawCommand === "update" || rawCommand === "list") {
 		command = rawCommand;
 	}
@@ -699,6 +712,11 @@ export async function handlePackageCommand(
 					}
 				}
 
+				return true;
+			}
+
+			case "rebuild": {
+				await rebuildExtensions(settingsManager, cwd, agentDir);
 				return true;
 			}
 

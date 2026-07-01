@@ -371,6 +371,50 @@ function isCurrentCacheToken(cacheToken: ExtensionCacheToken | undefined): cache
 	);
 }
 
+/**
+ * Hoisted module cache - shared across all jiti instances.
+ * Pre-compiles and caches shared dependencies (pi-agent-core, pi-tui, etc.)
+ */
+const hoistedModules = new Map<string, unknown>();
+let _hoistedJiti: ReturnType<typeof createJiti> | null = null;
+
+function getHoistedJiti(): ReturnType<typeof createJiti> {
+	if (_hoistedJiti) return _hoistedJiti;
+	_hoistedJiti = createJiti(import.meta.url, {
+		moduleCache: true,
+		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
+	});
+	return _hoistedJiti;
+}
+
+/**
+ * Pre-load shared dependencies into the hoisted cache.
+ */
+async function preloadHoistedDependencies(): Promise<void> {
+	if (hoistedModules.size > 0) return;
+
+	const sharedDeps = [
+		"@earendil-works/pi-agent-core",
+		"@earendil-works/pi-tui",
+		"@earendil-works/pi-ai",
+		"@earendil-works/pi-ai/compat",
+		"@earendil-works/pi-coding-agent",
+		"typebox",
+		"typebox/compile",
+		"typebox/value",
+	];
+
+	const jiti = getHoistedJiti();
+	for (const dep of sharedDeps) {
+		try {
+			const mod = await jiti.import(dep, { default: false });
+			hoistedModules.set(dep, mod);
+		} catch {
+			// Some deps may not be available in all environments
+		}
+	}
+}
+
 async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
 	if (isCurrentCacheToken(cacheToken)) {
 		const cachedFactory = extensionCache.get(extensionPath);
@@ -379,15 +423,15 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		}
 	}
 
-	const jiti = createJiti(import.meta.url, {
-		moduleCache: false,
-		// In Bun binary: use virtualModules for bundled packages (no filesystem resolution)
-		// Also disable tryNative so jiti handles ALL imports (not just the entry point)
-		// In Node.js/dev: use aliases to resolve to node_modules paths
-		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
-	});
+	// Ensure shared dependencies are pre-loaded
+	await preloadHoistedDependencies();
 
+	const jiti = getHoistedJiti();
+
+	const startTime = performance.now();
 	const module = await jiti.import(extensionPath, { default: true });
+	const endTime = performance.now();
+	console.log(`[Hoisting] ${extensionPath} loaded in ${(endTime - startTime).toFixed(2)}ms`);
 	const factory = module as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;

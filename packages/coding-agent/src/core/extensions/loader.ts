@@ -387,7 +387,10 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
 	});
 
+	const startTime = performance.now();
 	const module = await jiti.import(extensionPath, { default: true });
+	const endTime = performance.now();
+	console.log(`Extension ${extensionPath} loaded in ${endTime - startTime}ms`);
 	const factory = module as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;

@@ -378,6 +378,20 @@ function isCurrentCacheToken(cacheToken: ExtensionCacheToken | undefined): cache
 	);
 }
 
+/**
+ * Shared jiti instance with module caching enabled.
+ */
+let _sharedJiti: ReturnType<typeof createJiti> | null = null;
+
+function getSharedJiti(): ReturnType<typeof createJiti> {
+	if (_sharedJiti) return _sharedJiti;
+	_sharedJiti = createJiti(import.meta.url, {
+		moduleCache: true,
+		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
+	});
+	return _sharedJiti;
+}
+
 async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
 	if (isCurrentCacheToken(cacheToken)) {
 		const cachedFactory = extensionCache.get(extensionPath);
@@ -386,15 +400,12 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		}
 	}
 
-	const jiti = createJiti(import.meta.url, {
-		moduleCache: false,
-		// In Bun binary: use virtualModules for bundled packages (no filesystem resolution)
-		// Also disable tryNative so jiti handles ALL imports (not just the entry point)
-		// In Node.js/dev: use aliases to resolve to node_modules paths
-		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
-	});
+	const jiti = getSharedJiti();
 
+	const startTime = performance.now();
 	const module = await jiti.import(extensionPath, { default: true });
+	const endTime = performance.now();
+	console.log(`[Parallel] ${extensionPath} loaded in ${(endTime - startTime).toFixed(2)}ms`);
 	const factory = module as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;
@@ -492,22 +503,18 @@ async function loadExtensionsInternal(
 	const resolvedEventBus = eventBus ?? createEventBus();
 	const resolvedRuntime = runtime ?? createExtensionRuntime();
 
-	for (const extPath of paths) {
-		const { extension, error } = await loadExtension(
-			extPath,
-			resolvedCwd,
-			resolvedEventBus,
-			resolvedRuntime,
-			cacheToken,
-		);
+	// Load all extensions in parallel
+	const results = await Promise.all(
+		paths.map((extPath) =>
+			loadExtension(extPath, resolvedCwd, resolvedEventBus, resolvedRuntime, cacheToken)
+		)
+	);
 
-		if (error) {
-			errors.push({ path: extPath, error });
-			continue;
-		}
-
-		if (extension) {
-			extensions.push(extension);
+	for (const result of results) {
+		if (result.error) {
+			errors.push({ path: "unknown", error: result.error });
+		} else if (result.extension) {
+			extensions.push(result.extension);
 		}
 	}
 

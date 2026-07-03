@@ -1407,6 +1407,134 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
+		// Process Google AI Studio models (Cloud Code Assist API)
+		// These models are available via the Gemini CLI / Antigravity endpoint
+		// and support both Gemini and Claude models with thinking support.
+		const googleAiStudioModels: Model<any>[] = [
+			{
+				id: "gemini-2.0-flash",
+				name: "Gemini 2.0 Flash",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: false,
+				input: ["text", "image"],
+				cost: {
+					input: 0.1,
+					output: 0.4,
+					cacheRead: 0.025,
+					cacheWrite: 0,
+				},
+				contextWindow: 1048576,
+				maxTokens: 8192,
+			},
+			{
+				id: "gemini-2.5-flash",
+				name: "Gemini 2.5 Flash",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: {
+					input: 0.3,
+					output: 2.5,
+					cacheRead: 0.03,
+					cacheWrite: 0,
+				},
+				contextWindow: 1048576,
+				maxTokens: 65536,
+			},
+			{
+				id: "gemini-2.5-pro",
+				name: "Gemini 2.5 Pro",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: {
+					input: 1.25,
+					output: 10,
+					cacheRead: 0.125,
+					cacheWrite: 0,
+				},
+				contextWindow: 1048576,
+				maxTokens: 65536,
+			},
+			{
+				id: "gemini-3-flash-preview",
+				name: "Gemini 3 Flash Preview",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				thinkingLevelMap: {"off": null},
+				input: ["text", "image"],
+				cost: {
+					input: 0.5,
+					output: 3,
+					cacheRead: 0.05,
+					cacheWrite: 0,
+				},
+				contextWindow: 1048576,
+				maxTokens: 65536,
+			},
+			{
+				id: "gemini-3-pro-preview",
+				name: "Gemini 3 Pro Preview",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				thinkingLevelMap: {"off": null, "minimal": null, "low": "LOW", "medium": null, "high": "HIGH"},
+				input: ["text", "image"],
+				cost: {
+					input: 2,
+					output: 12,
+					cacheRead: 0.2,
+					cacheWrite: 0,
+				},
+				contextWindow: 1048576,
+				maxTokens: 65536,
+			},
+			{
+				id: "claude-sonnet-4-6",
+				name: "Claude Sonnet 4.6",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: {
+					input: 3,
+					output: 15,
+					cacheRead: 0.3,
+					cacheWrite: 0,
+				},
+				contextWindow: 200000,
+				maxTokens: 8192,
+			},
+			{
+				id: "claude-opus-4-6",
+				name: "Claude Opus 4.6",
+				api: "google-ai-studio",
+				provider: "google-ai-studio",
+				baseUrl: "https://cloudcode-pa.googleapis.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: {
+					input: 15,
+					output: 75,
+					cacheRead: 1.5,
+					cacheWrite: 0,
+				},
+				contextWindow: 200000,
+				maxTokens: 4096,
+			},
+		];
+		models.push(...googleAiStudioModels);
+
 		// Process MiniMax models
 		const minimaxVariants = [
 			{ key: "minimax", provider: "minimax", baseUrl: "https://api.minimax.io/anthropic" },

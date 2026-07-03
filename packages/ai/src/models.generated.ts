@@ -12,6 +12,7 @@ import { DEEPSEEK_MODELS } from "./providers/deepseek.models.ts";
 import { FIREWORKS_MODELS } from "./providers/fireworks.models.ts";
 import { GITHUB_COPILOT_MODELS } from "./providers/github-copilot.models.ts";
 import { GOOGLE_MODELS } from "./providers/google.models.ts";
+import { GOOGLE_AI_STUDIO_MODELS } from "./providers/google-ai-studio.models.ts";
 import { GOOGLE_VERTEX_MODELS } from "./providers/google-vertex.models.ts";
 import { GROQ_MODELS } from "./providers/groq.models.ts";
 import { HUGGINGFACE_MODELS } from "./providers/huggingface.models.ts";
@@ -49,6 +50,7 @@ export const MODELS = {
 	"fireworks": FIREWORKS_MODELS,
 	"github-copilot": GITHUB_COPILOT_MODELS,
 	"google": GOOGLE_MODELS,
+	"google-ai-studio": GOOGLE_AI_STUDIO_MODELS,
 	"google-vertex": GOOGLE_VERTEX_MODELS,
 	"groq": GROQ_MODELS,
 	"huggingface": HUGGINGFACE_MODELS,

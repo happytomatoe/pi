@@ -2,6 +2,7 @@ import type { ChildProcess, ChildProcessByStdio } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 function getEnv(): NodeJS.ProcessEnv {
 	if (process.platform !== "linux" || Object.keys(process.env).length > 0) {
@@ -989,6 +990,7 @@ export class DefaultPackageManager implements PackageManager {
 				if (!existsSync(resolved)) {
 					throw new Error(`Path does not exist: ${resolved}`);
 				}
+				await this.compileAot(resolved);
 				return;
 			}
 			throw new Error(`Unsupported install source: ${source}`);
@@ -1761,6 +1763,31 @@ export class DefaultPackageManager implements PackageManager {
 		const installRoot = this.getNpmInstallRoot(scope, temporary);
 		this.ensureNpmProject(installRoot);
 		await this.runNpmCommand(this.getNpmInstallArgs([source.spec], installRoot));
+		await this.compileAot(this.getNpmInstallPath(source, scope));
+	}
+
+	private async compileAot(installedPath: string): Promise<void> {
+		const entries = resolveExtensionEntries(installedPath);
+		if (!entries) {
+			return;
+		}
+
+		const __dirname = dirname(fileURLToPath(import.meta.url));
+		const scriptPath = join(__dirname, "..", "..", "scripts", "aot-compile.ts");
+		if (!existsSync(scriptPath)) {
+			console.warn(`[AOT] Compilation script not found at ${scriptPath}`);
+			return;
+		}
+
+		for (const entry of entries) {
+			if (entry.endsWith(".ts")) {
+				try {
+					await this.runCommand("npx", ["tsx", scriptPath, entry]);
+				} catch (error) {
+					console.warn(`[AOT] Compilation failed for ${entry}: ${error}`);
+				}
+			}
+		}
 	}
 
 	private async uninstallNpm(source: NpmSource, scope: SourceScope): Promise<void> {
@@ -1800,6 +1827,7 @@ export class DefaultPackageManager implements PackageManager {
 		if (existsSync(packageJsonPath)) {
 			await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
 		}
+		await this.compileAot(targetDir);
 	}
 
 	private async updateGit(source: GitSource, scope: SourceScope): Promise<void> {

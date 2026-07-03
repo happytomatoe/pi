@@ -378,11 +378,75 @@ function isCurrentCacheToken(cacheToken: ExtensionCacheToken | undefined): cache
 	);
 }
 
-async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
+export async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
+	console.log(`[Ldr] Loading module: ${extensionPath}`);
 	if (isCurrentCacheToken(cacheToken)) {
 		const cachedFactory = extensionCache.get(extensionPath);
 		if (cachedFactory) {
 			return cachedFactory;
+		}
+	}
+
+	// Use native import for .js files (AOT compiled or native JS)
+	if (extensionPath.endsWith(".js")) {
+		const startTime = performance.now();
+		try {
+			const module = await import(extensionPath);
+			const endTime = performance.now();
+			console.log(`[AOT] ${extensionPath} loaded in ${endTime - startTime}ms`);
+			const factory = (module.default || module) as ExtensionFactory;
+			if (typeof factory === "function") {
+				if (isCurrentCacheToken(cacheToken)) {
+					extensionCache.set(extensionPath, factory);
+				}
+				return factory;
+			}
+		} catch (err) {
+			console.warn(`[AOT] Native import failed for ${extensionPath}, falling back to jiti: ${err}`);
+		}
+	}
+
+	// For .ts files, check for AOT-compiled .js fallback
+	if (extensionPath.endsWith(".ts")) {
+		const extDir = path.dirname(extensionPath);
+
+		// Find package root (where package.json is)
+		let packageRoot = extDir;
+		let found = false;
+		while (packageRoot !== path.parse(packageRoot).root) {
+			if (fs.existsSync(path.join(packageRoot, "package.json"))) {
+				found = true;
+				break;
+			}
+			packageRoot = path.dirname(packageRoot);
+		}
+
+		if (!found) {
+			packageRoot = extDir;
+		}
+
+		const buildDir = path.join(packageRoot, "build");
+		const extName = path.basename(extensionPath);
+		const aotPath = path.join(buildDir, extName.replace(/\.ts$/, ".js"));
+
+		console.log(`[Ldr] Checking AOT path: ${aotPath} - exists: ${fs.existsSync(aotPath)}`);
+
+		if (fs.existsSync(aotPath)) {
+			const startTime = performance.now();
+			try {
+				const module = await import(aotPath);
+				const endTime = performance.now();
+				console.log(`[AOT] ${extensionPath} (compiled as ${aotPath}) loaded in ${endTime - startTime}ms`);
+				const factory = (module.default || module) as ExtensionFactory;
+				if (typeof factory === "function") {
+					if (isCurrentCacheToken(cacheToken)) {
+						extensionCache.set(extensionPath, factory);
+					}
+					return factory;
+				}
+			} catch (err) {
+				console.warn(`[AOT] Native import failed for compiled ${aotPath}, falling back to jiti: ${err}`);
+			}
 		}
 	}
 
@@ -569,7 +633,7 @@ function isExtensionFile(name: string): boolean {
  *
  * Returns resolved paths or null if no entry points found.
  */
-function resolveExtensionEntries(dir: string): string[] | null {
+export function resolveExtensionEntries(dir: string): string[] | null {
 	// Check for package.json with "pi" field first
 	const packageJsonPath = path.join(dir, "package.json");
 	if (fs.existsSync(packageJsonPath)) {

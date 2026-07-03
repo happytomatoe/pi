@@ -23,18 +23,6 @@ describe("AOT Compilation", () => {
 
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		// Add package to settings so rebuildExtensions finds it
-		settingsManager.setPackages([{ source: "local:my-extension" }]);
-
-		// Use the real package manager's resolve logic via rebuildExtensions
-		// But wait, rebuildExtensions uses listConfiguredPackages().
-		// We need to make sure the package is actually "installed" at the path.
-
-		// Instead of relying on a complex setup, let's just mock the package manager or
-		// manually create the structure.
-
-		// Actually, rebuildExtensions calls packageManager.listConfiguredPackages()
-		// which uses getInstalledPath().
-		// Let's just use the real rebuildExtensions and set up the environment.
 
 		// For this test to work, the package must be recognized as installed.
 		// Let's manually create the "installed" directory.
@@ -49,7 +37,7 @@ describe("AOT Compilation", () => {
 
 		await rebuildExtensions(settingsManager, tempDir, tempDir);
 
-		const buildPath = join(installedPath, "..", "build", "index.js");
+		const buildPath = join(installedPath, "build", "index.js");
 		expect(existsSync(buildPath)).toBe(true);
 
 		const content = readFileSync(buildPath, "utf-8");

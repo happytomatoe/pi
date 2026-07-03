@@ -716,7 +716,10 @@ export async function handlePackageCommand(
 			}
 
 			case "rebuild": {
-				await rebuildExtensions(settingsManager, cwd, agentDir);
+				const failed = await rebuildExtensions(settingsManager, cwd, agentDir);
+				if (failed > 0) {
+					process.exitCode = 1;
+				}
 				return true;
 			}
 

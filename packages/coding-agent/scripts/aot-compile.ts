@@ -38,17 +38,22 @@ async function compileExtension(entryPoint: string): Promise<number> {
     fs.mkdirSync(outDir, { recursive: true });
 
     console.log(`[AOT] Writing output to: ${outFile}`);
-    await build({
-        entryPoints: [entryPoint],
-        outfile: outFile,
-        bundle: true,
-        platform: "node",
-        format: "esm",
-        external: EXTERNAL_DEPS,
-        target: "node18",
-        minify: false,
-        sourcemap: false,
-    });
+    try {
+        await build({
+            entryPoints: [entryPoint],
+            outfile: outFile,
+            bundle: true,
+            platform: "node",
+            format: "esm",
+            external: EXTERNAL_DEPS,
+            target: "node22",
+            minify: false,
+            sourcemap: false,
+        });
+    } catch (err) {
+        console.error(`[AOT] Build failed for ${entryPoint}:`, err);
+        throw err;
+    }
 
     const elapsed = performance.now() - startTime;
     console.log(`[AOT] Compiled ${path.basename(entryPoint)} in ${elapsed.toFixed(0)}ms`);
@@ -58,5 +63,11 @@ async function compileExtension(entryPoint: string): Promise<number> {
 // CLI entry point
 const entryPoint = process.argv[2];
 if (entryPoint) {
-    compileExtension(entryPoint).catch(console.error);
+    compileExtension(entryPoint).catch((err) => {
+        console.error(err);
+        process.exit(1);
+    });
+} else {
+    console.error("Usage: node aot-compile.js <entry-point>");
+    process.exit(1);
 }

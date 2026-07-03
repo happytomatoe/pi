@@ -384,7 +384,7 @@ export async function loadExtensionModule(extensionPath: string, cacheToken?: Ex
 	if (extensionPath.endsWith(".js")) {
 		const startTime = performance.now();
 		try {
-			const module = await import(extensionPath);
+			const module = await import(`${extensionPath}?t=${Date.now()}`);
 			const endTime = performance.now();
 			console.log(`[AOT] ${extensionPath} loaded in ${endTime - startTime}ms`);
 			const factory = (module.default || module) as ExtensionFactory;
@@ -419,8 +419,8 @@ export async function loadExtensionModule(extensionPath: string, cacheToken?: Ex
 		}
 
 		const buildDir = path.join(packageRoot, "build");
-		const extName = path.basename(extensionPath);
-		const aotPath = path.join(buildDir, extName.replace(/\.ts$/, ".js"));
+		const relativePath = path.relative(packageRoot, extensionPath);
+		const aotPath = path.join(buildDir, relativePath.replace(/\.ts$/, ".js"));
 
 		console.log(`[Ldr] Checking AOT path: ${aotPath} - exists: ${fs.existsSync(aotPath)}`);
 

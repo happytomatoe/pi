@@ -9,7 +9,7 @@ export async function rebuildExtensions(
 	settingsManager: SettingsManager,
 	cwd: string,
 	agentDir: string,
-): Promise<void> {
+): Promise<number> {
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
@@ -21,7 +21,7 @@ export async function rebuildExtensions(
 	let failed = 0;
 
 	const __dirname = dirname(fileURLToPath(import.meta.url));
-	const scriptPath = join(__dirname, "..", "..", "..", "scripts", "aot-compile.ts");
+	const scriptPath = join(__dirname, "..", "..", "..", "scripts", "aot-compile.js");
 
 	for (const pkg of configuredPackages) {
 		const installedPath = pkg.installedPath;
@@ -33,7 +33,7 @@ export async function rebuildExtensions(
 		for (const entry of entries) {
 			if (entry.endsWith(".ts")) {
 				try {
-					const child = spawnProcess("npx", ["tsx", scriptPath, entry], { stdio: "inherit" });
+					const child = spawnProcess("node", [scriptPath, entry], { stdio: "inherit" });
 					const exitCode = await waitForChildProcess(child);
 					if (exitCode !== 0) {
 						throw new Error(`Compilation exited with code ${exitCode}`);
@@ -48,4 +48,5 @@ export async function rebuildExtensions(
 	}
 
 	console.log(`[AOT] Compiled ${compiled} extensions, ${failed} failed`);
+	return failed;
 }

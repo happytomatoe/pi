@@ -197,14 +197,69 @@ When pi starts in AOT mode, automatically compile all extensions BEFORE loading.
 #### 1. Create Compilation Trigger Module
 **File**: `packages/coding-agent/src/core/extensions/compilation-trigger.ts` (NEW)
 
-// ... (code as before) ...
+```typescript
+/**
+ * Compilation trigger - handles automatic extension compilation.
+ * 
+ * This module is RESPONSIBLE FOR:
+ * - Detecting if compilation is needed
+ * - Triggering compilation when mode changes
+ * - Failing fast if compilation fails
+ * 
+ * This module is NOT RESPONSIBLE FOR:
+ * - The actual compilation (delegated to rebuild.ts)
+ * - Loading extensions (delegated to loader.ts)
+ * - Knowing about jiti (that's loader's concern)
+ */
 
-#### 2. Update rebuildExtensions to handle auto-discovery
-**File**: `packages/coding-agent/src/core/extensions/rebuild.ts`
+import type { SettingsManager } from "../settings-manager.ts";
+import { rebuildExtensions } from "./rebuild.ts";
 
-Modify `rebuildExtensions` to not only compile configured packages but also any extensions auto-discovered in `agentDir/extensions` and `cwd/.pi/extensions`. This ensures that AOT mode doesn't break auto-discovered extensions.
+export interface CompilationTriggerOptions {
+  settingsManager: SettingsManager;
+  cwd: string;
+  agentDir: string;
+}
 
-#### 3. Integrate at Application Startup
+/**
+ * Check if extensions need compilation based on current mode.
+ */
+export function needsCompilation(settingsManager: SettingsManager): boolean {
+  return settingsManager.getExtensionCompilationMode() === "aot";
+}
+
+/**
+ * Trigger compilation of all extensions.
+ * Called once at startup when in AOT mode.
+ * Throws if compilation fails (fail-fast).
+ */
+export async function triggerCompilationIfNeeded(
+  options: CompilationTriggerOptions
+): Promise<boolean> {
+  const { settingsManager, cwd, agentDir } = options;
+  
+  if (!needsCompilation(settingsManager)) {
+    return false;
+  }
+  
+  console.log("[AOT] Compilation mode enabled, compiling extensions...");
+  
+  try {
+    await rebuildExtensions(settingsManager, cwd, agentDir);
+    console.log("[AOT] Extension compilation complete");
+    return true;
+  } catch (error) {
+    console.error("[AOT] Extension compilation failed:", error);
+    // Fail-fast: throw to prevent startup
+    throw new Error(
+      `Extension compilation failed in AOT mode. ` +
+      `Fix the error above or change extensionCompilationMode to "jit".`
+    );
+  }
+}
+```
+
+#### 2. Integrate at Application Startup
 **File**: `packages/coding-agent/src/cli.ts` or appropriate startup location
 
 ```typescript
@@ -373,17 +428,11 @@ function getCompiledPath(tsPath: string): string | null {
   
   // Find package root
   let packageRoot = extDir;
-  let found = false;
   while (packageRoot !== path.parse(packageRoot).root) {
     if (fs.existsSync(path.join(packageRoot, "package.json"))) {
-      found = true;
       break;
     }
     packageRoot = path.dirname(packageRoot);
-  }
-  
-  if (!found) {
-    packageRoot = extDir;
   }
   
   const buildDir = path.join(packageRoot, "build");

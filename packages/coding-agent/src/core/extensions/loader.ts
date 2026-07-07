@@ -378,6 +378,20 @@ function isCurrentCacheToken(cacheToken: ExtensionCacheToken | undefined): cache
 	);
 }
 
+/**
+ * Shared jiti instance for extensions without AOT-compiled versions.
+ */
+let _sharedJiti: ReturnType<typeof createJiti> | null = null;
+
+function getSharedJiti(): ReturnType<typeof createJiti> {
+	if (_sharedJiti) return _sharedJiti;
+	_sharedJiti = createJiti(import.meta.url, {
+		moduleCache: true,
+		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
+	});
+	return _sharedJiti;
+}
+
 async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
 	if (isCurrentCacheToken(cacheToken)) {
 		const cachedFactory = extensionCache.get(extensionPath);
@@ -386,16 +400,32 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		}
 	}
 
-	const jiti = createJiti(import.meta.url, {
-		moduleCache: false,
-		// In Bun binary: use virtualModules for bundled packages (no filesystem resolution)
-		// Also disable tryNative so jiti handles ALL imports (not just the entry point)
-		// In Node.js/dev: use aliases to resolve to node_modules paths
-		...(isBunBinary ? { virtualModules: VIRTUAL_MODULES, tryNative: false } : { alias: getAliases() }),
-	});
+	// Check for AOT-compiled .js file first
+	const extDir = path.dirname(extensionPath);
+	const extName = path.basename(extensionPath);
+	const buildDir = path.join(extDir, "..", "build");
+	const aotPath = path.join(buildDir, extName.replace(/\.ts$/, ".js"));
 
-	const module = await jiti.import(extensionPath, { default: true });
-	const factory = module as ExtensionFactory;
+	let loadPath = extensionPath;
+	if (fs.existsSync(aotPath)) {
+		loadPath = aotPath;
+	}
+
+	const startTime = performance.now();
+	let module: { default?: unknown };
+
+	// If loading a .js file, skip jiti entirely
+	if (loadPath.endsWith(".js")) {
+		module = await import(loadPath);
+		console.log(`[AOT] ${extensionPath} loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+	} else {
+		// Fallback to jiti for .ts files
+		const jiti = getSharedJiti();
+		module = await jiti.import(extensionPath, { default: true }) as { default?: unknown };
+		console.log(`[jiti] ${extensionPath} loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+	}
+
+	const factory = (module.default ?? module) as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;
 	}

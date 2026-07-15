@@ -1,1 +1,4 @@
 *.bun-build
+src/core/extensions/bundled-extensions.gen.ts
+tsconfig.build.bundled.json
+.bundle-stage/

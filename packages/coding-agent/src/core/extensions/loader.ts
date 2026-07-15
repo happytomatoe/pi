@@ -29,6 +29,7 @@ import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
 import { createSyntheticSourceInfo } from "../source-info.ts";
 import { time } from "../timings.ts";
+import { BUNDLED_EXTENSIONS } from "./bundled-extensions.ts";
 import type {
 	EntryRenderer,
 	Extension,
@@ -384,6 +385,19 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		if (cachedFactory) {
 			return cachedFactory;
 		}
+	}
+
+	// Bundled-binary fast path: if this extension was compiled into the binary
+	// at build time, return its factory directly (no jiti, no sidecar read).
+	// Keyed by the path relative to the agent dir so it is portable across
+	// install locations. Extensions not present here fall through to jiti.
+	const bundledKey = path.relative(getAgentDir(), extensionPath).split(path.sep).join("/");
+	const bundledFactory = BUNDLED_EXTENSIONS[bundledKey];
+	if (bundledFactory) {
+		if (isCurrentCacheToken(cacheToken)) {
+			extensionCache.set(extensionPath, bundledFactory);
+		}
+		return bundledFactory;
 	}
 
 	const jiti = createJiti(import.meta.url, {
